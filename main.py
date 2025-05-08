@@ -90,8 +90,7 @@ def bypass_captcha(driver):
 
 def type_text(text):
     for word in text:
-            pyautogui.typewrite(word)
-            pyautogui.press('space')
+            pyautogui.typewrite(word + " ", interval=0)  # Type each word with a small delay
 
 def scrape_and_type(driver):
     try:
@@ -128,24 +127,100 @@ def scrape_and_type(driver):
         print(f"Error occurred: {e}")
         return []
 
+def human_benchmark(driver):
+    page_source = driver.page_source
+    soup = BeautifulSoup(page_source, 'html.parser')
+    
+    # Find all spans with class="incomplete"
+    target_elements = soup.find_all("span", class_="incomplete")
+    
+    scraped_data = ""
+    for element in target_elements:
+        text = element.text
+        scraped_data += text  # Add space between words
+    
+    return scraped_data.strip()
+
+def monkey_type(driver):
+    try:
+        wait = WebDriverWait(driver, 10)
+        
+        # Attempt to find and click the cookie prompt button
+        try:
+            accept_cookies = wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'accept all')]")))
+            accept_cookies.click()
+        except Exception as e:
+            print(f"Failed to find or click the Accept button: {e}")
+        
+        # Wait for the JavaScript to load
+        wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.word")))
+        
+        # Ensure the page has finished loading
+        time.sleep(2)  # Optional delay
+        
+        page_source = driver.page_source
+        soup = BeautifulSoup(page_source, 'html.parser')
+        
+        scraped_data = ""
+        # Find all divs with class "word"
+        divs = soup.find_all("div", class_="word")
+        
+        if not divs:
+            print("No divs with class 'word' found.")
+            return ""
+        
+        for div in divs:
+            target_elements = div.find_all("letter")
+            if not target_elements:
+                print("No letter tags found within divs.")
+                return ""
+            
+            for i in target_elements:
+                scraped_data += i.text
+            scraped_data += " "
+        
+        return scraped_data.strip()
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return ""
+
+
 def main():
+    ch = int(input("Choose a website:\n1. Type Racer\n2. Human Benchmark\n3. Monkey Type\nEnter your choice: "))
     # Set up Chrome options
     chrome_options = Options()
     chrome_options.add_argument('--ignore-certificate-errors')
     chrome_options.add_argument('--ignore-ssl-errors')
     chrome_options.add_argument('--disable-gpu')
+    #chrome_options.add_argument("--disable-notifications")
     chrome_options.add_experimental_option('excludeSwitches', ['enable-logging'])
     driver = webdriver.Chrome(options=chrome_options)
-    website_url = "https://play.typeracer.com/"
-    driver.get(website_url)
-    data = scrape_and_type(driver)
-    #print("Scraped data:", data)
-    keyboard.wait('enter')
-    type_text(data) # Wait for Enter key to be pressed
-    time.sleep(2)
-    bypass_captcha(driver)  # Call the function to bypass captcha
-    # Add this to keep the window open
-    #no_captcha(driver)
+    website_url1 = "https://play.typeracer.com/"
+    website_url2 = "https://humanbenchmark.com/tests/typing"
+    website_url3 = "https://monkeytype.com/"
+    if ch == 1:
+        driver.get(website_url1)
+        data = scrape_and_type(driver)
+        #print("Scraped data:", data)
+        keyboard.wait('enter')
+        type_text(data) # Wait for Enter key to be pressed
+        time.sleep(2)
+        bypass_captcha(driver)  # Call the function to bypass captcha
+    elif ch == 2:
+        driver.get(website_url2)
+        data = human_benchmark(driver)
+        pyautogui.typewrite(data, interval=0)  # Call the function to bypass captcha
+    elif ch == 3:
+        driver.get(website_url3)
+        data = monkey_type(driver)
+        print("Scraped data:", data)
+        keyboard.wait('enter')
+        pyautogui.typewrite(data, interval=0)
+
+    else:
+        print("Invalid choice. Exiting...")
+        return
     print("Press 'q' to quit...")
     keyboard.wait('q')
     driver.quit()  # Properly close the browser
